@@ -1,0 +1,23 @@
+{
+    "name": "katena-chain/sdk-php-client",
+    "license": "Apache-2.0",
+    "description": "Katena SDK-php-client",
+    "type": "library",
+    "authors": [
+        {
+            "name": "TransChain",
+            "email": "contact@transchain.fr"
+        }
+    ],
+    "require": {
+        "php": "^7.1",
+        "guzzlehttp/guzzle": "~6.0",
+        "paragonie/sodium_compat": "^1.9",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "KatenaChain\\Client\\": "src/"
+        }
+    }
+}
