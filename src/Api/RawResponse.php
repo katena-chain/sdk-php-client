@@ -7,12 +7,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-namespace KatenaChain\Client\Utils\Api;
+namespace KatenaChain\Client\Api;
 
 /**
- * Response is a ResponseInterface wrapper
+ * RawResponse is a ResponseInterface wrapper.
  */
-class Response
+class RawResponse
 {
     /**
      * @var int
@@ -25,7 +25,7 @@ class Response
     protected $body;
 
     /**
-     * Response constructor.
+     * RawResponse constructor.
      * @param int $statusCode
      * @param string $body
      */
@@ -36,6 +36,7 @@ class Response
     }
 
     /**
+     * statusCode getter.
      * @return int
      */
     public function getStatusCode(): int
@@ -44,6 +45,7 @@ class Response
     }
 
     /**
+     * body getter.
      * @return string
      */
     public function getBody(): string

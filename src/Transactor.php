@@ -11,15 +11,28 @@ namespace KatenaChain\Client;
 
 use DateTime;
 use DateTimeZone;
+use Exception;
+use GuzzleHttp\Exception\GuzzleException;
 use KatenaChain\Client\Api\Handler;
-use KatenaChain\Client\Crypto\PrivateKey;
-use KatenaChain\Client\Api\handler as ApiClient;
+use KatenaChain\Client\Crypto\ED25519\PrivateKey;
+use KatenaChain\Client\Crypto\X25519\PublicKey;
+use KatenaChain\Client\Entity\Client\CertificateV1Wrapper;
+use KatenaChain\Client\Entity\Client\SecretV1Wrapper;
+use KatenaChain\Client\Entity\Client\SecretV1Wrappers;
+use KatenaChain\Client\Entity\Api\TransactionStatus;
 use KatenaChain\Client\Entity\Certify\Certificate\V1\Certificate;
-use KatenaChain\Client\Entity\Certify\MessageCreateCertificate;
+use KatenaChain\Client\Entity\Certify\Certificate\V1\DataSeal;
+use KatenaChain\Client\Entity\Certify\Secret\V1\Lock;
+use KatenaChain\Client\Entity\Certify\Secret\V1\Secret;
+use KatenaChain\Client\Entity\Certify\MsgCreateCertificate;
+use KatenaChain\Client\Entity\Certify\MsgCreateSecret;
 use KatenaChain\Client\Entity\Api\Transaction;
+use KatenaChain\Client\Entity\MessageInterface;
+use KatenaChain\Client\Entity\Seal;
 use KatenaChain\Client\Entity\SealState;
-use KatenaChain\Client\Utils\Api\Response;
-use KatenaChain\Client\Utils\Crypto;
+use KatenaChain\Client\Exceptions\ApiException;
+use KatenaChain\Client\Utils\Formatter;
+use SodiumException;
 
 /**
  * Transactor provides helper function to hide the complexity of Transaction creation, signature and API dialog.
@@ -29,67 +42,179 @@ class Transactor
     /**
      * @var PrivateKey
      */
-    protected $privateKey;
+    protected $msgSigner;
 
     /**
-     * @var ApiClient
+     * @var Handler
      */
-    protected $apiClient;
+    protected $apiHandler;
+
     /**
      * @var string
      */
-    protected $companyChainId;
+    protected $companyChainID;
+
     /**
      * @var string
      */
-    protected $chainId;
+    protected $chainID;
 
     /**
      * Transactor constructor.
      * @param string $apiUrl
-     * @param string $apiUrlSuffix
-     * @param string $chainId
-     * @param string $privateKey (base64)
-     * @param string $companyChainId
+     * @param string $companyChainID
+     * @param string $chainID
+     * @param PrivateKey $msgSigner
      */
-    public function __construct(string $apiUrl, string $apiUrlSuffix, string $chainId, string $privateKey, string $companyChainId)
+    public function __construct(string $apiUrl, string $companyChainID, string $chainID = "", PrivateKey $msgSigner = null)
     {
-        $this->apiClient = new Handler($apiUrl, $apiUrlSuffix);
-        $this->chainId = $chainId;
-        $this->privateKey = Crypto::createPrivateKeyFromBase64($privateKey);
-        $this->companyChainId = $companyChainId;
+        $this->apiHandler = new Handler($apiUrl);
+        $this->chainID = $chainID;
+        $this->msgSigner = $msgSigner;
+        $this->companyChainID = $companyChainID;
     }
 
     /**
-     * sendCertificate creates a Certificate (V1) wrapped in a MessageCreateCertificate, signs it and sends it to the API.
-     * @param string $uUid
-     * @param string $signature
-     * @param string $signer
-     * @return Response
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \SodiumException
-     * @throws \Exception
+     * sendCertificateV1 wraps a Certificate (V1) in a MsgCreateCertificate, creates a transaction and sends it to the
+     * API.
+     * @param string $uuid
+     * @param string $dataSignature
+     * @param string $dataSigner
+     * @return TransactionStatus
+     * @throws ApiException
+     * @throws SodiumException
+     * @throws GuzzleException
      */
-    public function sendCertificate(string $uUid, string $signature, string $signer): Response
+    public function sendCertificateV1(string $uuid, string $dataSignature, string $dataSigner): TransactionStatus
     {
+        $dataSeal = new DataSeal($dataSignature, $dataSigner);
         $certificate = new Certificate(
-            $uUid,
-            $this->companyChainId,
-            $signature,
-            $signer
+            $uuid,
+            $this->companyChainID,
+            $dataSeal
         );
+        $message = new MsgCreateCertificate($certificate);
 
-        $nonceTime = new DateTime();
-        $nonceTime->setTimezone(new DateTimeZone("UTC"));
+        $transaction = $this->getTransaction($message);
 
-        $message = new MessageCreateCertificate($certificate);
-        $sealDoc = new SealState($this->chainId, $nonceTime, $message);
+        return $this->apiHandler->sendCertificate($transaction);
+    }
+
+    /**
+     * retrieveCertificateV1 fetches the API to find the corresponding transaction and converts its content to a
+     * Certificate (V1) with its blockchain status.
+     * @param string $uuid
+     * @return CertificateV1Wrapper
+     * @throws ApiException
+     * @throws GuzzleException
+     * @throws Exception
+     */
+    public function retrieveCertificateV1(string $uuid): CertificateV1Wrapper
+    {
+        $transactionWrapper = $this->apiHandler->retrieveCertificate($this->companyChainID, $uuid);
+        if ($transactionWrapper->getTransaction()->getMessage()->getType() === MsgCreateCertificate::TYPE) {
+            /**
+             * @var MsgCreateCertificate $message
+             */
+            $message = $transactionWrapper->getTransaction()->getMessage();
+            if ($message->getCertificate()->getType() === Certificate::TYPE) {
+                /**
+                 * @var Certificate $certificate
+                 */
+                $certificate = $message->getCertificate();
+                return new CertificateV1Wrapper($certificate, $transactionWrapper->getStatus());
+            } else {
+                throw new Exception(sprintf("bad certificate type: %s", $message->getCertificate()->getType()));
+            }
+        } else {
+            throw new Exception(sprintf("bad message type: %s", $transactionWrapper->getTransaction()->getMessage()->getType()));
+        }
+    }
+
+    /**
+     * sendSecretV1 wraps a Secret (V1) in a MsgCreateSecret, creates a transaction and sends it to the API.
+     * @param string $certificateUuid
+     * @param PublicKey $lockEncryptor
+     * @param string $lockNonce
+     * @param string $lockContent
+     * @return TransactionStatus
+     * @throws GuzzleException
+     * @throws SodiumException
+     * @throws ApiException
+     */
+    public function sendSecretV1(string $certificateUuid, PublicKey $lockEncryptor, string $lockNonce, string $lockContent): TransactionStatus
+    {
+        $lock = new Lock($lockEncryptor, $lockNonce, $lockContent);
+        $secret = new Secret(
+            $certificateUuid,
+            $this->companyChainID,
+            $lock
+        );
+        $message = new MsgCreateSecret($secret);
+
+        $transaction = $this->getTransaction($message);
+
+        return $this->apiHandler->sendSecret($transaction, $this->companyChainID, $certificateUuid);
+    }
+
+    /**
+     * retrieveSecretsV1 fetches the API to find the corresponding transactions and converts their content to a Secret
+     * (V1) with its blockchain status.
+     * @param string $uuid
+     * @return SecretV1Wrappers
+     * @throws ApiException
+     * @throws GuzzleException
+     * @throws Exception
+     */
+    public function retrieveSecretsV1(string $uuid): SecretV1Wrappers
+    {
+        $transactionWrappers = $this->apiHandler->retrieveSecrets($this->companyChainID, $uuid);
+        $secretV1WrappersArray = [];
+        foreach ($transactionWrappers->getTransactions() as $transactionWrapper) {
+            if ($transactionWrapper->getTransaction()->getMessage()->getType() === MsgCreateSecret::TYPE) {
+                /**
+                 * @var MsgCreateSecret $message
+                 */
+                $message = $transactionWrapper->getTransaction()->getMessage();
+                if ($message->getSecret()->getType() === Secret::TYPE) {
+                    /**
+                     * @var Secret $secret
+                     */
+                    $secret = $message->getSecret();
+                    $secretV1WrappersArray[] = new SecretV1Wrapper($secret, $transactionWrapper->getStatus());
+                } else {
+                    throw new Exception(sprintf("bad secret type: %s", $message->getSecret()->getType()));
+                }
+            } else {
+                throw new Exception(sprintf("bad message type: %s", $transactionWrapper->getTransaction()->getMessage()->getType()));
+            }
+        }
+        return new SecretV1Wrappers($secretV1WrappersArray, $transactionWrappers->getTotal());
+    }
+
+    /**
+     * getTransaction signs a message and returns a new transaction ready to be sent.
+     * @param MessageInterface $message
+     * @return Transaction
+     * @throws Exception
+     * @throws SodiumException
+     */
+    public function getTransaction(MessageInterface $message): Transaction
+    {
+        $now = new DateTime();
+        $now->setTimezone(new DateTimeZone("UTC"));
+
+        $nonceTime = Formatter::formatDate($now);
+
+        $sealDoc = new SealState($this->chainID, $nonceTime, $message);
         $sealDocBytes = $sealDoc->getSignBytes();
 
-        $messageSignature = $this->privateKey->sign($sealDocBytes);
+        if (is_null($this->msgSigner)) {
+            throw new Exception("impossible to create transactions without a private key");
+        }
+        $msgSignature = $this->msgSigner->sign($sealDocBytes);
+        $seal = new Seal($msgSignature, $this->msgSigner->getPublicKey());
 
-        $transaction = new Transaction($message, $messageSignature, $this->privateKey->getPublicKey(), $nonceTime);
-
-        return $this->apiClient->sendCertificate($transaction->toJson());
+        return new Transaction($message, $seal, $nonceTime);
     }
 }

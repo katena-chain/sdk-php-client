@@ -9,7 +9,10 @@
 
 namespace KatenaChain\Client\Entity\Api;
 
-use KatenaChain\Client\Crypto\PublicKey;
+use DateTime;
+use Exception;
+use KatenaChain\Client\Entity\Certify\MsgCreateCertificate;
+use KatenaChain\Client\Entity\Certify\MsgCreateSecret;
 use KatenaChain\Client\Entity\MessageInterface;
 use KatenaChain\Client\Entity\Seal;
 use KatenaChain\Client\Utils\Formatter;
@@ -19,6 +22,11 @@ use KatenaChain\Client\Utils\Formatter;
  */
 class Transaction
 {
+    const MESSAGES_MAPPING = [
+        MsgCreateCertificate::TYPE => 'KatenaChain\Client\Entity\Certify\MsgCreateCertificate',
+        MsgCreateSecret::TYPE      => 'KatenaChain\Client\Entity\Certify\MsgCreateSecret',
+    ];
+
     /**
      * @var MessageInterface
      */
@@ -30,43 +38,59 @@ class Transaction
     protected $seal;
 
     /**
-     * @var \DateTime
+     * @var string
      */
     protected $nonceTime;
 
     /**
      * Transaction constructor.
      * @param MessageInterface $message
-     * @param array $messageSignature
-     * @param PublicKey $publicKey
-     * @param \DateTime $nonceTime
+     * @param Seal $seal
+     * @param string $nonceTime
      */
-    public function __construct(MessageInterface $message, array $messageSignature, PublicKey $publicKey, \DateTime $nonceTime)
+    public function __construct(MessageInterface $message, Seal $seal, string $nonceTime)
     {
         $this->message = $message;
         $this->nonceTime = $nonceTime;
-        $this->seal = new Seal($messageSignature, $publicKey);
+        $this->seal = $seal;
     }
 
     /**
-     * toArray returns the array representation of a Transaction (required for json marshaling).
-     * @return array
+     * message getter.
+     * @return MessageInterface
      */
-    public function toArray(): array
+    public function getMessage(): MessageInterface
     {
-        return [
-            'message' => $this->message->toArray(),
-            'seal' => $this->seal->toArray(),
-            'nonce_time' => Formatter::formatDate($this->nonceTime),
-        ];
+        return $this->message;
     }
 
     /**
-     * toJson returns the json representation of a Transaction.
+     * toJSON returns the json representation of a Transaction.
      * @return string
      */
-    public function toJson() :string
+    public function toJSON(): string
     {
-        return json_encode($this->toArray(), JSON_UNESCAPED_SLASHES);
+        return json_encode([
+            'message'    => $this->message->toArray(),
+            'nonce_time' => $this->nonceTime,
+            'seal'       => $this->seal->toArray(),
+        ], JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * fromArray accepts an array representation of a Transaction and returns a new instance.
+     * @param array $array
+     * @return Transaction
+     * @throws Exception
+     */
+    public static function fromArray(array $array): self
+    {
+        if (array_key_exists($array['message']['type'], self::MESSAGES_MAPPING)) {
+            $message = call_user_func(self::MESSAGES_MAPPING[$array['message']['type']] . "::fromArray", $array['message']['value']);
+            $seal = Seal::fromArray($array['seal']);
+            return new self($message, $seal, $array['nonce_time']);
+        } else {
+            throw new Exception(sprintf("unknown message type: %s", $array['message']['type']));
+        }
     }
 }

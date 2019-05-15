@@ -9,8 +9,7 @@
 
 namespace KatenaChain\Client\Entity;
 
-use KatenaChain\Client\Crypto\PublicKey;
-use KatenaChain\Client\Utils\Formatter;
+use KatenaChain\Client\Crypto\ED25519\PublicKey;
 
 /**
  * Seal is a wrapper to an ED25519 signature and its corresponding ED25519 public key.
@@ -29,25 +28,36 @@ class Seal
 
     /**
      * Seal constructor.
-     * @param array $signature
+     * @param string $signature
      * @param PublicKey $signer
      */
-    public function __construct(array $signature, PublicKey $signer)
+    public function __construct(string $signature, PublicKey $signer)
     {
         $this->signature = $signature;
         $this->signer = $signer;
     }
 
     /**
-     * toArray returns the array representation of a Seal (required for json marshaling).
+     * toArray returns the array representation of a Seal.
      * @return array
      */
-    public function toArray() :array
+    public function toArray(): array
     {
         return [
-            'signature' => base64_encode(Formatter::byteArray2String($this->signature)),
-            'signer' => $this->signer->toBase64(),
+            'signature' => base64_encode($this->signature),
+            'signer'    => base64_encode($this->signer->getKey())
         ];
+    }
+
+    /**
+     * fromArray accepts an array representation of a Seal and returns a new instance.
+     * @param array $array
+     * @return Seal
+     */
+    public static function fromArray(array $array): self
+    {
+        $signer = new PublicKey(base64_decode($array['signer']));
+        return new self(base64_decode($array['signature']), $signer);
     }
 
 }

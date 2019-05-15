@@ -7,17 +7,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-namespace KatenaChain\Client\Entity\Certify\Certificate;
+namespace KatenaChain\Client\Entity\Certify\Secret;
 
 /**
- * CertificateInterface sets the default methods a real certificate must implement.
+ * SecretInterface sets the default methods a real secret must implement.
  */
-interface CertificateInterface
+interface SecretInterface
 {
     /**
      * @return string
      */
-    public function getUuid(): string;
+    public function getCertificateUuid(): string;
 
     /**
      * @return string

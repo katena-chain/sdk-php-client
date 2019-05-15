@@ -9,33 +9,31 @@
 
 namespace KatenaChain\Client\Crypto;
 
-use KatenaChain\Client\Utils\Formatter;
-
 /**
- * AbstractKey holds a binary key
+ * AbstractKey holds a string key
  */
 abstract class AbstractKey
 {
     /**
-     * @var array
+     * @var string
      */
     protected $key;
 
     /**
      * AbstractKey constructor.
-     * @param array $key (bytes array)
+     * @param string $key
      */
-    public function __construct(array $key)
+    public function __construct(string $key)
     {
         $this->key = $key;
     }
 
     /**
-     * toBase64 returns the base64 value of a binary key.
+     * key getter.
      * @return string
      */
-    public function toBase64()
+    public function getKey(): string
     {
-        return base64_encode(Formatter::byteArray2String($this->key));
+        return $this->key;
     }
 }

@@ -7,12 +7,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-namespace KatenaChain\Client\Crypto;
+namespace KatenaChain\Client\Crypto\X25519;
+
+use KatenaChain\Client\Crypto\AbstractKey;
+use ParagonIE_Sodium_Compat;
+use SodiumException;
 
 /**
- * PublicKey is an ED25519 public key wrapper (32 bytes).
+ * PublicKey is an X25519 public key wrapper (32 bytes).
  */
 class PublicKey extends AbstractKey
 {
-
 }

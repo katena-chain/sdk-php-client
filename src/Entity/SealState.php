@@ -9,6 +9,7 @@
 
 namespace KatenaChain\Client\Entity;
 
+use DateTime;
 use KatenaChain\Client\Utils\Formatter;
 
 /**
@@ -19,10 +20,10 @@ class SealState
     /**
      * @var string
      */
-    protected $chainId;
+    protected $chainID;
 
     /**
-     * @var \DateTime
+     * @var string
      */
     protected $nonceTime;
 
@@ -33,48 +34,28 @@ class SealState
 
     /**
      * SealState constructor.
-     * @param string $chainId
-     * @param \DateTime $nonceTime
+     * @param string $chainID
+     * @param string $nonceTime
      * @param MessageInterface $message
      */
-    public function __construct(string $chainId, \DateTime $nonceTime, MessageInterface $message)
+    public function __construct(string $chainID, string $nonceTime, MessageInterface $message)
     {
-        $this->chainId = $chainId;
+        $this->chainID = $chainID;
         $this->nonceTime = $nonceTime;
         $this->message = $message;
     }
 
     /**
-     * toArray returns the array representation of a SealState (required for json marshaling).
-     * @return array
-     */
-    public function toArray(): array
-    {
-        return [
-            'chain_id'   => $this->chainId,
-            'message'    => $this->message->toTypedArray(),
-            'nonce_time' => Formatter::formatDate($this->nonceTime),
-        ];
-    }
-
-    /**
-     * toJson returns the json representation of a SealState.
+     * getSignBytes returns the sorted and marshaled values of a seal state.
      * @return string
      */
-    public function toJson():string
+    public function getSignBytes(): string
     {
-        return json_encode($this->toArray(), JSON_UNESCAPED_SLASHES);
-    }
-
-    /**
-     * getSignBytes returns the sorted and marshaled values of a seal state.
-     * @return array
-     */
-    public function getSignBytes(): array
-    {
-        return Formatter::string2ByteArray(
-           $this->toJson()
-        );
+        return json_encode([
+            'chain_id'   => $this->chainID,
+            'message'    => $this->message->toArray(),
+            'nonce_time' => $this->nonceTime,
+        ], JSON_UNESCAPED_SLASHES);
     }
 
 }

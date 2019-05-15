@@ -9,7 +9,6 @@
 
 namespace KatenaChain\Client\Utils;
 
-
 class Uri
 {
     /**
@@ -19,7 +18,7 @@ class Uri
      * @param array $queryValues
      * @return string
      */
-    public static function getUri(string $basePath, array $paths, array $queryValues = []) : string
+    public static function getUri(string $basePath, array $paths, array $queryValues = []): string
     {
         array_walk($paths, function (&$path) {
             $path = trim($path, '/');

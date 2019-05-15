@@ -15,12 +15,18 @@ namespace KatenaChain\Client\Entity;
 interface MessageInterface
 {
     /**
+     * @return string
+     */
+    public function getType(): string;
+
+    /**
      * @return array
      */
     public function toArray(): array;
 
     /**
-     * @return array
+     * @param array $array
+     * @return mixed
      */
-    public function toTypedArray(): array;
+    public static function fromArray(array $array);
 }
