@@ -115,7 +115,7 @@ class Handler
      * @throws ApiException
      * @throws GuzzleException
      */
-    private function sendTransaction(string $route, Transaction $transaction): TransactionStatus
+    public function sendTransaction(string $route, Transaction $transaction): TransactionStatus
     {
         try {
             $apiResponse = $this->apiClient->post($route, $transaction->toJSON());
