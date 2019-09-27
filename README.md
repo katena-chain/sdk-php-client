@@ -1,5 +1,7 @@
 # SDK PHP Client
 
+Please use [sdk-php](https://github.com/katena-chain/sdk-php) instead.
+
 ## Requirements
 
 - PHP >= 7.1
